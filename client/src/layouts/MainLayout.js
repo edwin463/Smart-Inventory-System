@@ -86,14 +86,6 @@ function MainLayout() {
             </Typography>
 
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              {user?.is_admin && (
-                <Chip
-                  label="Admin User"
-                  color="warning"
-                  variant="filled"
-                  sx={{ fontWeight: "bold" }}
-                />
-              )}
               {user?.email && (
                 <Typography variant="body2" sx={{ fontWeight: "bold" }}>
                   {user.email}
