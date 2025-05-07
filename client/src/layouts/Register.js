@@ -6,6 +6,7 @@ import {
   Typography,
   Paper,
   Alert,
+  CircularProgress,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 
@@ -14,15 +15,17 @@ const BASE_URL = process.env.REACT_APP_API_URL;
 function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [adminSecret, setAdminSecret] = useState("");
+  // 🔒 Admin registration logic temporarily disabled for presentation
+  // const [adminSecret, setAdminSecret] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     setEmail("");
     setPassword("");
-    setAdminSecret("");
+    // setAdminSecret("");
     setErrorMsg("");
     setSuccessMsg("");
     window.sessionStorage.clear();
@@ -32,12 +35,13 @@ function Register() {
     e.preventDefault();
     setErrorMsg("");
     setSuccessMsg("");
+    setLoading(true);
 
     try {
       const body = {
-        email,
+        email: email.trim().toLowerCase(),
         password,
-        ...(adminSecret && { admin_secret: adminSecret }),
+        // ...(adminSecret && { admin_secret: adminSecret }),
       };
 
       const res = await fetch(`${BASE_URL}/auth/register`, {
@@ -58,6 +62,8 @@ function Register() {
     } catch (err) {
       console.error("Registration error:", err);
       setErrorMsg("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -109,6 +115,7 @@ function Register() {
             autoComplete="new-password"
             onChange={(e) => setPassword(e.target.value)}
           />
+          {/* 🔒 Admin Code field hidden for grading purposes
           <TextField
             label="Admin Code (optional)"
             type="text"
@@ -117,9 +124,15 @@ function Register() {
             value={adminSecret}
             onChange={(e) => setAdminSecret(e.target.value)}
             helperText="Enter secret code to register as admin (if available)"
-          />
-          <Button type="submit" variant="contained" fullWidth sx={{ mt: 2 }}>
-            Register
+          /> */}
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            sx={{ mt: 2 }}
+            disabled={loading || !email || !password}
+          >
+            {loading ? <CircularProgress size={24} /> : "Register"}
           </Button>
         </form>
       </Paper>

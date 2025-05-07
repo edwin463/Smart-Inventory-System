@@ -7,6 +7,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 report_bp = Blueprint('reports', __name__)
 
+# Parse date range from query params
 def parse_date_range():
     start = request.args.get('start')
     end = request.args.get('end')
@@ -17,7 +18,7 @@ def parse_date_range():
     except ValueError:
         return None, None
 
-# GET /reports/revenue
+# ✅ GET /reports/revenue
 @report_bp.route('/revenue', methods=['GET'])
 @jwt_required()
 def get_total_revenue():
@@ -25,11 +26,10 @@ def get_total_revenue():
     if not start:
         return jsonify({'error': 'Invalid date format'}), 400
 
-    user_id = get_jwt_identity()
     product_id = request.args.get('product_id', type=int)
 
     query = db.session.query(func.sum(Sale.total_price))\
-        .filter(Sale.timestamp.between(start, end), Sale.user_id == user_id)
+        .filter(Sale.timestamp.between(start, end))
 
     if product_id:
         query = query.filter(Sale.product_id == product_id)
@@ -37,7 +37,7 @@ def get_total_revenue():
     total = query.scalar() or 0
     return jsonify({'total_revenue': round(total, 2)}), 200
 
-# GET /reports/expenses
+# ✅ GET /reports/expenses
 @report_bp.route('/expenses', methods=['GET'])
 @jwt_required()
 def get_total_expenses():
@@ -45,15 +45,13 @@ def get_total_expenses():
     if not start:
         return jsonify({'error': 'Invalid date format'}), 400
 
-    user_id = get_jwt_identity()
-
     total = db.session.query(func.sum(Expense.amount))\
-        .filter(Expense.timestamp.between(start, end), Expense.user_id == user_id)\
+        .filter(Expense.timestamp.between(start, end))\
         .scalar() or 0
 
     return jsonify({'total_expenses': round(total, 2)}), 200
 
-# GET /reports/profit
+# ✅ GET /reports/profit
 @report_bp.route('/profit', methods=['GET'])
 @jwt_required()
 def get_profit():
@@ -61,19 +59,20 @@ def get_profit():
     if not start:
         return jsonify({'error': 'Invalid date format'}), 400
 
-    user_id = get_jwt_identity()
     product_id = request.args.get('product_id', type=int)
 
-    sale_query = db.session.query(func.sum(Sale.total_price))\
-        .filter(Sale.timestamp.between(start, end), Sale.user_id == user_id)
+    revenue_query = db.session.query(func.sum(Sale.total_price))\
+        .filter(Sale.timestamp.between(start, end))
     if product_id:
-        sale_query = sale_query.filter(Sale.product_id == product_id)
-    revenue = sale_query.scalar() or 0
+        revenue_query = revenue_query.filter(Sale.product_id == product_id)
+
+    revenue = revenue_query.scalar() or 0
 
     expense_query = db.session.query(func.sum(Expense.amount))\
-        .filter(Expense.timestamp.between(start, end), Expense.user_id == user_id)
+        .filter(Expense.timestamp.between(start, end))
     if product_id:
         expense_query = expense_query.filter(Expense.product_id == product_id)
+
     expenses = expense_query.scalar() or 0
 
     return jsonify({
@@ -82,21 +81,32 @@ def get_profit():
         'profit': round(revenue - expenses, 2)
     }), 200
 
-# GET /reports/top-products
+# ✅ GET /reports/top-products
 @report_bp.route('/top-products', methods=['GET'])
 @jwt_required()
 def top_products():
-    user_id = get_jwt_identity()
-    result = db.session.query(
-        Product.name,
-        func.sum(Sale.quantity).label('units_sold')
-    ).join(Sale).filter(Sale.user_id == user_id)\
-     .group_by(Product.id).order_by(func.sum(Sale.quantity).desc()).limit(5).all()
+    results = (
+        db.session.query(
+            Product.id,
+            Product.name.label("product"),
+            db.func.coalesce(db.func.sum(Sale.quantity), 0).label("units_sold")
+        )
+        .outerjoin(Sale, Sale.product_id == Product.id)
+        .group_by(Product.id)
+        .order_by(db.func.sum(Sale.quantity).desc())
+        .all()
+    )
 
-    top = [{'product': row.name, 'units_sold': row.units_sold} for row in result]
-    return jsonify(top), 200
+    data = [
+        {
+            "product_id": row.id,
+            "product": row.product,
+            "units_sold": int(row.units_sold or 0)
+        } for row in results
+    ]
+    return jsonify(data), 200
 
-# GET /reports/profit-summary
+# ✅ GET /reports/profit-summary
 @report_bp.route('/profit-summary', methods=['GET'])
 @jwt_required()
 def profit_summary():
@@ -104,21 +114,18 @@ def profit_summary():
     if not start:
         return jsonify({'error': 'Invalid date format'}), 400
 
-    user_id = get_jwt_identity()
     products = Product.query.all()
     result = []
 
     for product in products:
         revenue = db.session.query(func.sum(Sale.total_price)).filter(
             Sale.product_id == product.id,
-            Sale.timestamp.between(start, end),
-            Sale.user_id == user_id
+            Sale.timestamp.between(start, end)
         ).scalar() or 0
 
         expenses = db.session.query(func.sum(Expense.amount)).filter(
             Expense.product_id == product.id,
-            Expense.timestamp.between(start, end),
-            Expense.user_id == user_id
+            Expense.timestamp.between(start, end)
         ).scalar() or 0
 
         result.append({
@@ -131,7 +138,7 @@ def profit_summary():
 
     return jsonify(result), 200
 
-# GET /reports/user-summary (ADMIN ONLY)
+# ✅ GET /reports/user-summary — Admin Only
 @report_bp.route('/user-summary', methods=['GET'])
 @jwt_required()
 def get_admin_user_summary():
@@ -141,7 +148,7 @@ def get_admin_user_summary():
 
     requester_id = get_jwt_identity()
     admin_user = User.query.get(requester_id)
-    if not admin_user or not getattr(admin_user, 'is_admin', False):
+    if not admin_user or not admin_user.is_admin:
         return jsonify({'error': 'Unauthorized'}), 403
 
     users = User.query.all()
@@ -167,3 +174,27 @@ def get_admin_user_summary():
         })
 
     return jsonify(summary), 200
+
+# ✅ GET /reports/user-sales/<user_id> — Admin Only
+@report_bp.route('/user-sales/<int:user_id>', methods=['GET'])
+@jwt_required()
+def get_sales_by_user(user_id):
+    requester_id = get_jwt_identity()
+    requester = User.query.get(requester_id)
+    if not requester or not requester.is_admin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    sales = Sale.query.filter_by(user_id=user_id).order_by(Sale.timestamp.desc()).all()
+    return jsonify([
+        {
+            "id": sale.id,
+            "product_id": sale.product_id,
+            "quantity": sale.quantity,
+            "total_price": sale.total_price,
+            "timestamp": sale.timestamp.isoformat()
+        } for sale in sales
+    ]), 200

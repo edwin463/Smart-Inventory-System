@@ -1,12 +1,20 @@
 import React from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+} from "recharts";
 import { Typography, Box } from "@mui/material";
 import PropTypes from "prop-types";
 
 function SalesChart({ products }) {
   const data = products.map((product) => ({
     name: product.name,
-    sales: product.sales?.reduce((total, s) => total + s.quantity, 0) || 0,
+    sales: product.sales_count || 0, // 🔥 Use backend-calculated value
   }));
 
   return (

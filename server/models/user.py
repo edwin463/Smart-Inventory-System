@@ -8,12 +8,13 @@ class User(db.Model, SerializerMixin):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
 
-    # ✅ Admin flag
-    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    # Relationships
+    sales = db.relationship('Sale', back_populates='user', cascade='all, delete-orphan')
+    expenses = db.relationship('Expense', back_populates='user', cascade='all, delete-orphan')
 
-    # Rules for automatic JSON serialization
-    serialize_rules = ('-password_hash',)
+    serialize_rules = ('-password_hash', '-sales.user', '-expenses.user', 'id', 'email')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

@@ -19,29 +19,24 @@ function Login() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
 
+  // ✅ Auto-login if token already exists
   useEffect(() => {
-    setEmail("");
-    setPassword("");
-
     const token = localStorage.getItem("token") || sessionStorage.getItem("token");
     const userData = localStorage.getItem("user") || sessionStorage.getItem("user");
 
     if (token && userData) {
-      try {
-        const user = JSON.parse(userData);
-        navigate(user.is_admin ? "/admin-dashboard" : "/inventory");
-      } catch {
-        // Ignore malformed data
-      }
+      navigate("/inventory"); // Always redirect to main page
     }
   }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg("");
+    setSubmitting(true);
 
     try {
       const res = await fetch(`${BASE_URL}/auth/login`, {
@@ -58,20 +53,16 @@ function Login() {
         storage.setItem("token", data.token);
         storage.setItem("user", JSON.stringify(data.user));
 
-        login(data.token, data.user); // ✅ Pass both to context
-
-        if (data.user.is_admin) {
-          alert("🎉 Welcome Admin! Redirecting to your dashboard...");
-          navigate("/admin-dashboard");
-        } else {
-          navigate("/inventory");
-        }
+        login(data.token, data.user);
+        navigate("/inventory");
       } else {
         setErrorMsg(data.error || "Invalid credentials. Try again.");
       }
     } catch (err) {
       console.error("Login error:", err);
       setErrorMsg("Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -95,7 +86,7 @@ function Login() {
           </Alert>
         )}
 
-        <form onSubmit={handleLogin} autoComplete="off">
+        <form onSubmit={handleLogin} autoComplete="off" noValidate>
           <TextField
             label="Email"
             type="email"
@@ -106,6 +97,7 @@ function Login() {
             name="login-email"
             autoComplete="new-email"
             onChange={(e) => setEmail(e.target.value)}
+            aria-label="Login email"
           />
           <TextField
             label="Password"
@@ -117,6 +109,7 @@ function Login() {
             name="login-password"
             autoComplete="new-password"
             onChange={(e) => setPassword(e.target.value)}
+            aria-label="Login password"
           />
 
           <FormControlLabel
@@ -131,8 +124,14 @@ function Login() {
             sx={{ mt: 1 }}
           />
 
-          <Button type="submit" variant="contained" fullWidth sx={{ mt: 2 }}>
-            Login
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            sx={{ mt: 2 }}
+            disabled={submitting}
+          >
+            {submitting ? "Logging in..." : "Login"}
           </Button>
         </form>
       </Paper>

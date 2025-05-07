@@ -8,7 +8,6 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
 
   useEffect(() => {
-    // Check both storages
     const storedToken = localStorage.getItem("token") || sessionStorage.getItem("token");
     const storedUser = localStorage.getItem("user") || sessionStorage.getItem("user");
 
@@ -24,7 +23,7 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const login = (newToken, userData) => {
+  const login = async (newToken, userData) => {
     if (!newToken || !userData) {
       console.error("❌ Missing token or user data during login.");
       return;
@@ -32,10 +31,12 @@ export function AuthProvider({ children }) {
 
     setToken(newToken);
     setUser(userData);
+
+    // ✅ Optional: Delay to allow state to settle before redirects (especially useful in edge cases)
+    await new Promise((resolve) => setTimeout(resolve, 50));
   };
 
   const logout = () => {
-    // Clear both session and local storage
     localStorage.removeItem("token");
     sessionStorage.removeItem("token");
     localStorage.removeItem("user");

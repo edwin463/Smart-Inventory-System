@@ -6,7 +6,8 @@ import {
   Paper,
   Divider,
   IconButton,
-  Button,
+  CircularProgress,
+  Alert,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
@@ -20,30 +21,42 @@ const BASE_URL = process.env.REACT_APP_API_URL;
 function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { token } = useAuth();
 
   const [product, setProduct] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingExpense, setEditingExpense] = useState(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`${BASE_URL}/products/${id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setProduct(data);
-        setLoading(false);
-      });
+    if (!token) return;
 
-    fetch(`${BASE_URL}/expenses/product/${id}`)
-      .then((res) => res.json())
-      .then(setExpenses);
+    const headers = { Authorization: `Bearer ${token}` };
 
-    fetch(`${BASE_URL}/sales/product/${id}`)
-      .then((res) => res.json())
-      .then(setSales);
-  }, [id]);
+    Promise.all([
+      fetch(`${BASE_URL}/products/${id}`, { headers }).then((res) =>
+        res.ok ? res.json() : Promise.reject("Failed to load product")
+      ),
+      fetch(`${BASE_URL}/expenses/product/${id}`, { headers }).then((res) =>
+        res.ok ? res.json() : Promise.reject("Failed to load expenses")
+      ),
+      fetch(`${BASE_URL}/sales/product/${id}`, { headers }).then((res) =>
+        res.ok ? res.json() : Promise.reject("Failed to load sales")
+      ),
+    ])
+      .then(([prod, exp, sal]) => {
+        setProduct(prod);
+        setExpenses(exp);
+        setSales(sal);
+      })
+      .catch((err) => {
+        console.error("❌ Error loading product details:", err);
+        setError(err.toString());
+      })
+      .finally(() => setLoading(false));
+  }, [id, token]);
 
   const handleExpenseSubmit = (formData) => {
     const payload = {
@@ -54,47 +67,52 @@ function ProductDetail() {
 
     const headers = {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     };
-    if (user?.token) headers["Authorization"] = `Bearer ${user.token}`;
 
-    if (editingExpense) {
-      fetch(`${BASE_URL}/expenses/${editingExpense.id}`, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify(payload),
-      })
-        .then((res) => res.json())
-        .then((updatedExpense) => {
-          const updated = expenses.map((exp) =>
-            exp.id === updatedExpense.id ? updatedExpense : exp
+    const endpoint = editingExpense
+      ? `${BASE_URL}/expenses/${editingExpense.id}`
+      : `${BASE_URL}/expenses/`;
+
+    const method = editingExpense ? "PATCH" : "POST";
+
+    fetch(endpoint, {
+      method,
+      headers,
+      body: JSON.stringify(payload),
+    })
+      .then((res) => res.ok ? res.json() : Promise.reject("Expense save failed"))
+      .then((expense) => {
+        if (editingExpense) {
+          setExpenses((prev) =>
+            prev.map((exp) => (exp.id === expense.id ? expense : exp))
           );
-          setExpenses(updated);
           setEditingExpense(null);
-        });
-    } else {
-      fetch(`${BASE_URL}/expenses/`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
+        } else {
+          setExpenses((prev) => [...prev, expense]);
+        }
       })
-        .then((res) => res.json())
-        .then((newExpense) => setExpenses((prev) => [...prev, newExpense]));
-    }
+      .catch((err) => {
+        console.error("❌ Error saving expense:", err);
+        alert("Error saving expense");
+      });
   };
 
   const handleDeleteExpense = (expenseId) => {
     fetch(`${BASE_URL}/expenses/${expenseId}`, {
       method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${user?.token}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     })
-      .then((res) => res.json())
-      .then(() => {
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to delete expense");
         setExpenses((prev) => prev.filter((exp) => exp.id !== expenseId));
-        if (editingExpense && editingExpense.id === expenseId) {
+        if (editingExpense?.id === expenseId) {
           setEditingExpense(null);
         }
+      })
+      .catch((err) => {
+        console.error("❌ Error deleting expense:", err);
+        alert("Error deleting expense");
       });
   };
 
@@ -108,16 +126,46 @@ function ProductDetail() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${user?.token}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
     })
-      .then((res) => res.json())
-      .then((newSale) => setSales((prev) => [...prev, newSale]));
+      .then((res) => res.ok ? res.json() : Promise.reject("Sale failed"))
+      .then((newSale) => setSales((prev) => [...prev, newSale]))
+      .catch((err) => {
+        console.error("❌ Error recording sale:", err);
+        alert("Error recording sale");
+      });
   };
 
-  if (loading) return <Typography>Loading...</Typography>;
-  if (!product) return <Typography color="error">❌ Product not found.</Typography>;
+  if (!token) {
+    return (
+      <Box p={4}>
+        <Alert severity="warning">Please log in to view this product.</Alert>
+      </Box>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Box p={4}>
+        <CircularProgress />
+        <Typography>Loading product...</Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box p={4}>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
+  }
+
+  if (!product) {
+    return <Typography color="error">❌ Product not found.</Typography>;
+  }
 
   return (
     <Box p={3}>
@@ -126,8 +174,9 @@ function ProductDetail() {
       </IconButton>
 
       <Typography variant="h4" gutterBottom>{product.name}</Typography>
-      <Typography>Price: {product.price}</Typography>
+      <Typography>Price: KES {product.price?.toFixed(2) ?? "—"}</Typography>
       <Typography>Stock: {product.stock}</Typography>
+      <Typography>Sales Count: {product.sales_count ?? 0}</Typography>
       <Typography>Category: {product.category?.name || "—"}</Typography>
       <Typography>Supplier: {product.supplier?.name || "—"}</Typography>
 
@@ -140,14 +189,16 @@ function ProductDetail() {
       <SalesForm onSubmit={handleSaleSubmit} />
 
       <Box mt={4}>
-        <Typography variant="h6">Logged Expenses</Typography>
+        <Typography variant="h6">💰 Logged Expenses</Typography>
         {expenses.length === 0 ? (
           <Typography>No expenses yet.</Typography>
         ) : (
           expenses.map((exp) => (
             <Paper key={exp.id} sx={{ p: 2, mb: 2 }}>
               <Typography>Description: {exp.description}</Typography>
-              <Typography>Amount: {exp.amount}</Typography>
+              <Typography>
+                Amount: KES {typeof exp.amount === "number" ? exp.amount.toFixed(2) : "N/A"}
+              </Typography>
               <Typography>Category: {exp.category}</Typography>
               <IconButton onClick={() => setEditingExpense(exp)} color="primary">
                 <EditIcon />
@@ -161,15 +212,19 @@ function ProductDetail() {
       </Box>
 
       <Box mt={4}>
-        <Typography variant="h6">Sales Records</Typography>
+        <Typography variant="h6">📦 Sales Records</Typography>
         {sales.length === 0 ? (
           <Typography>No sales yet.</Typography>
         ) : (
           sales.map((sale) => (
             <Paper key={sale.id} sx={{ p: 2, mb: 2 }}>
               <Typography>Quantity Sold: {sale.quantity}</Typography>
-              <Typography>Total: {sale.total_price}</Typography>
-              <Typography>Date: {sale.timestamp}</Typography>
+              <Typography>
+                Total: KES {typeof sale.total_price === "number" ? sale.total_price.toFixed(2) : "N/A"}
+              </Typography>
+              <Typography>
+                Date: {new Date(sale.timestamp).toLocaleString()}
+              </Typography>
             </Paper>
           ))
         )}

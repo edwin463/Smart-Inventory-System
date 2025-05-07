@@ -1,26 +1,76 @@
 from flask import Blueprint, request, jsonify
 from database import db
 from models import Product, Category, Supplier
+from flask_jwt_extended import jwt_required
 
-product_bp = Blueprint('products', __name__) 
+product_bp = Blueprint('products', __name__)
 
-# GET /products - List all products
+# ✅ GET /products - List all products
 @product_bp.route('/', methods=['GET'])
-def get_all_products():
-    products = Product.query.order_by(Product.id.desc()).all()
-    return jsonify([p.to_dict(rules=('category', 'supplier', 'sales')) for p in products]), 200
+@jwt_required()
+def get_products():
+    try:
+        products = Product.query.all()
 
+        product_list = []
+        for product in products:
+            product_dict = {
+                "id": product.id,
+                "name": product.name,
+                "price": product.price,
+                "stock": product.stock,
+                "category": {
+                    "id": product.category.id,
+                    "name": product.category.name
+                } if product.category else None,
+                "supplier": {
+                    "id": product.supplier.id,
+                    "name": product.supplier.name,
+                    "contact_info": product.supplier.contact_info
+                } if product.supplier else None,
+                "sales_count": sum(s.quantity for s in product.sales)
+            }
+            product_list.append(product_dict)
 
-# GET /products - List all products
+        return jsonify(product_list), 200
+
+    except Exception as e:
+        print("❌ Error in /products:", e)
+        return jsonify({"error": str(e)}), 500
+
+# ✅ GET /products/<id> - Get a single product
 @product_bp.route('/<int:id>', methods=['GET'])
+@jwt_required()
 def get_product(id):
-    product = Product.query.get(id)
-    if product:
-        return jsonify(product.to_dict(rules=('category', 'supplier'))), 200
-    return jsonify({'error': 'Product not found'}), 404
+    try:
+        product = Product.query.get_or_404(id)
 
-# POST /products - Create a new product using category_name and supplier_name only
+        product_data = {
+            "id": product.id,
+            "name": product.name,
+            "price": product.price,
+            "stock": product.stock,
+            "sales_count": product.sales_count,
+            "category": {
+                "id": product.category.id,
+                "name": product.category.name
+            } if product.category else None,
+            "supplier": {
+                "id": product.supplier.id,
+                "name": product.supplier.name,
+                "contact_info": product.supplier.contact_info
+            } if product.supplier else None
+        }
+
+        return jsonify(product_data), 200
+
+    except Exception as e:
+        print(f"❌ Failed to load product {id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# ✅ POST /products - Create a product
 @product_bp.route('/', methods=['POST'])
+@jwt_required()
 def create_product():
     data = request.get_json()
     print("📥 Received data:", data)
@@ -35,7 +85,7 @@ def create_product():
     supplier_id = data.get("supplier_id")
     supplier_name = data.get("supplier_name")
 
-    # Create category if only name is provided
+    # Auto-create or fetch category if category_id is missing
     if not category_id and category_name:
         category = Category.query.filter_by(name=category_name).first()
         if not category:
@@ -44,7 +94,7 @@ def create_product():
             db.session.commit()
         category_id = category.id
 
-    # Create supplier if only name is provided
+    # Auto-create or fetch supplier if supplier_id is missing
     if not supplier_id and supplier_name:
         supplier = Supplier.query.filter_by(name=supplier_name).first()
         if not supplier:
@@ -53,7 +103,6 @@ def create_product():
             db.session.commit()
         supplier_id = supplier.id
 
-    # Validate essential fields
     if not name or price is None or category_id is None:
         return jsonify({"error": "Missing one of: name, price, or category"}), 400
 
@@ -67,21 +116,40 @@ def create_product():
         )
         db.session.add(new_product)
         db.session.commit()
-        full_product = Product.query.get(new_product.id)
-        return jsonify(full_product.to_dict(rules=("category", "supplier"))), 201
+
+        return jsonify({
+            "id": new_product.id,
+            "name": new_product.name,
+            "price": new_product.price,
+            "stock": new_product.stock,
+            "category": {
+                "id": new_product.category.id,
+                "name": new_product.category.name
+            } if new_product.category else None,
+            "supplier": {
+                "id": new_product.supplier.id,
+                "name": new_product.supplier.name,
+                "contact_info": new_product.supplier.contact_info
+            } if new_product.supplier else None
+        }), 201
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500 
-    
+        print("❌ Error creating product:", e)
+        return jsonify({"error": str(e)}), 500
 
+# ✅ DELETE /products/<id> - Delete a product
 @product_bp.route('/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_product(id):
     product = Product.query.get(id)
     if not product:
         return jsonify({'error': 'Product not found'}), 404
 
-    db.session.delete(product)
-    db.session.commit()
-    return jsonify({'message': 'Product deleted successfully'}), 200
-
+    try:
+        db.session.delete(product)
+        db.session.commit()
+        return jsonify({'message': 'Product deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

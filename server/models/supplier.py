@@ -8,7 +8,8 @@ class Supplier(db.Model, SerializerMixin):
     name = db.Column(db.String(120), nullable=False)
     contact_info = db.Column(db.String(200))
 
-    # One-to-many relationship with Product
     products = db.relationship('Product', back_populates='supplier', cascade='all, delete-orphan')
 
-    serialize_rules = ('-products.supplier',)
+    serialize_rules = (
+        '-products.supplier',
+    )

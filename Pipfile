@@ -11,6 +11,7 @@ sqlalchemy-serializer = "*"
 faker = "*"
 flask-cors = "*"
 python-dotenv = "*"
+flask-jwt-extended = "*"
 
 [dev-packages]
 

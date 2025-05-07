@@ -47,10 +47,7 @@ function ProductTable({ products, onDelete }) {
               <TableCell>{p.stock}</TableCell>
               <TableCell>{p.category?.name || "—"}</TableCell>
               <TableCell>{p.supplier?.name || "—"}</TableCell>
-              <TableCell>
-  {p.sales?.reduce((sum, sale) => sum + sale.quantity, 0) || 0}
-</TableCell>
-
+              <TableCell>{p.sales_count || 0}</TableCell>
               <TableCell align="right">
                 <IconButton
                   color="error"
