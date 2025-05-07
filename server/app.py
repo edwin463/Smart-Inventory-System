@@ -14,7 +14,11 @@ def create_app():
     app = Flask(__name__)
     
     # Allow CORS from React frontend (localhost)
-    CORS(app, supports_credentials=True, origins=["http://localhost:3000"])
+    CORS(app, supports_credentials=True, origins=[
+    "http://localhost:3000",
+    "https://smart-inventory-system.vercel.app"
+])
+
 
     # App configuration
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///inventory.db')
