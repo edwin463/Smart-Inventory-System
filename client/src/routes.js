@@ -8,8 +8,7 @@ import SalesOverview from "./layouts/SalesOverview";
 import Home from "./components/Home";
 import Login from "./layouts/Login";
 import Register from "./layouts/Register";
-import AdminUserReports from "./layouts/AdminUserReports";
-import AdminDashboard from "./layouts/AdminDashboard";
+
 
 const routes = [
   {
@@ -65,27 +64,8 @@ const routes = [
     route: "/sales-overview",
     component: <SalesOverview />,
     protected: true,
-  },
-  {
-    type: "collapse",
-    name: "Admin Dashboard",
-    key: "admin-dashboard",
-    icon: <i className="material-icons">admin_panel_settings</i>,
-    route: "/admin-dashboard",
-    component: <AdminDashboard />,
-    protected: true,
-    adminOnly: true, // 👈 only visible for admins
-  },
-  {
-    type: "collapse",
-    name: "User Reports",
-    key: "admin-user-reports",
-    icon: <i className="material-icons">supervisor_account</i>,
-    route: "/admin/user-reports",
-    component: <AdminUserReports />,
-    protected: true,
-    adminOnly: true, // 👈 only visible for admins
-  },
+  }, 
+
   {
     type: "route",
     name: "Product Detail",
